@@ -24,7 +24,8 @@ defaults = {
     'ei_positive_func':      'rectify',
     'hidden_activation':     'rectify',
     'output_activation':     'linear',
-    'n_gradient':            20,
+#    'n_gradient':            20,
+    'n_gradient':            20,    # Alfred
     'n_validation':          1000,
     'gradient_batch_size':   None,
     'validation_batch_size': None,
@@ -40,7 +41,9 @@ defaults = {
     'performance':           None,
     'terminate':             (lambda performance_history: False),
     'min_error':             0,
-    'learning_rate':         1e-2,
+#    'learning_rate':         1e-2,
+#    'learning_rate':         1e-3, # Alfred
+    'learning_rate':         1e-3, # Alfred
     'max_gradient_norm':     1,
     'bound':                 1e-20,
     'baseline_in':           0.2,
@@ -51,7 +54,8 @@ defaults = {
     'validation_seed':       22,
     'structure':             {},
     'rho0':                  1.5,
-    'max_iter':              int(1e7),
+#    'max_iter':              int(1e7),
+    'max_iter':              int(1e5), # modified by Alfred
     'dt':                    None,
     'distribution_in':       None,
     'distribution_rec':      None,

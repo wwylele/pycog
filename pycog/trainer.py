@@ -327,9 +327,6 @@ class Trainer(object):
         else:
             W = w
 
-
-
-
         return W.reshape((m, n))
 
     def train(self, savefile, task, recover=True):
@@ -384,21 +381,13 @@ class Trainer(object):
         settings['distribution (Wrec)'] = self.p['distribution_rec']
         settings['distribution (Wout)'] = self.p['distribution_out']
 
-        '''edit by Amartya - changed the weight intialisations to the weights obtained at the end of previous training'''
-        r  = RNN('examples/work/data/delay_react/delay_react.pkl', {'dt': 0.5, 'var_rec': 0.01**2})
-
-
-
         if Nin > 0:
-            Win_0 = r.Win
-            #Win_0 = self.init_weights(rng, self.p['Cin'], N, Nin,
-                                      #self.p['distribution_in'])
-        Wrec_0 = r.Wrec
-        #Wrec_0 = self.init_weights(rng, self.p['Crec'],
-                                   #N, N, self.p['distribution_rec'])
-        Wout_0 = r.Wout
-        #Wout_0 = self.init_weights(rng, self.p['Cout'],
-                                   #Nout, N, self.p['distribution_out'])
+            Win_0 = self.init_weights(rng, self.p['Cin'], N, Nin,
+                                      self.p['distribution_in'])
+        Wrec_0 = self.init_weights(rng, self.p['Crec'],
+                                   N, N, self.p['distribution_rec'])
+        Wout_0 = self.init_weights(rng, self.p['Cout'],
+                                   Nout, N, self.p['distribution_out'])
 
         #---------------------------------------------------------------------------------
         # Enforce Dale's law on the initial weights
@@ -417,6 +406,17 @@ class Trainer(object):
             Wout_0 = abs(Wout_0)
         else:
             settings['Dale\'s law'] = 'no'
+
+
+        # Added by Alfred for making the output network more biological
+        for i in range(Nout):
+          for j in range(N):
+#            if((i==j) and (i<10)):
+            if(i==j):
+              Wout_0[i,j] = 1
+            else:
+              Wout_0[i,j] = 0
+
 
         #---------------------------------------------------------------------------------
         # Fix spectral radius
@@ -455,14 +455,9 @@ class Trainer(object):
         # Others
         #---------------------------------------------------------------------------------
 
-        '''edit made by Amartya, intialising bout, brec0 and x0_0'''
-
-        #brec_0 = self.p['brec']*np.ones(N)
-        brec_0 = r.brec
-        #bout_0 = self.p['bout']*np.ones(Nout)
-        bout_0 = r.bout
-        #x0_0   = self.p['x0']*np.ones(N)
-        x0_0 = r.x0
+        brec_0 = self.p['brec']*np.ones(N)
+        bout_0 = self.p['bout']*np.ones(Nout)
+        x0_0   = self.p['x0']*np.ones(N)
 
         #---------------------------------------------------------------------------------
         # RNN parameters
@@ -478,7 +473,6 @@ class Trainer(object):
         bout = theanotools.shared(bout_0, name='bout')
         x0   = theanotools.shared(x0_0,   name='x0')
 
-        print('Rnn parameters:Wrec', Wrec)
 
         #---------------------------------------------------------------------------------
         # Parameters to train
@@ -560,6 +554,7 @@ class Trainer(object):
         else:
             Wout_ = Wout
 
+
         #---------------------------------------------------------------------------------
         # Dale's law
         #---------------------------------------------------------------------------------
@@ -584,6 +579,8 @@ class Trainer(object):
             Wrec_ = make_positive(Wrec_)*ei
 
             Wout_ = make_positive(Wout_)*ei
+
+        Wout_ = theanotools.shared(Wout_0, name='Wout') # Added by Alfred for making the output network more biological
 
         #---------------------------------------------------------------------------------
         # Variables to save
@@ -625,21 +622,8 @@ class Trainer(object):
         u   = T.tensor3('u')
         x0_ = T.alloc(x0, u.shape[1], x0.shape[0])
 
-        D_ = theano.shared(np.random.binomial(n=1, p=0.5, size = Wrec_.get_value().shape[0]))
-
-
-
-
         if Nin > 0:
-            def rnn(u_t, x_tm1, r_tm1, WinT, WrecT, D):
-                #edit by Amartya - dropout in WrecT
-                Wrec_value = WrecT.get_value().T
-                for p in range(len(D.get_value())):
-                    Wrec_value[p,:] = D.get_value()[p] * Wrec_value[p,:]
-                    Wrec_value[:,p] = D.get_value()[p] * Wrec_value[:,p]
-                WrecT.set_value(Wrec_value.T)
-
-
+            def rnn(u_t, x_tm1, r_tm1, WinT, WrecT):
                 x_t = ((1 - alpha)*x_tm1
                        + alpha*(T.dot(r_tm1, WrecT)        # Recurrent
                                 + brec                     # Bias
@@ -653,15 +637,9 @@ class Trainer(object):
             [x, r], _ = theano.scan(fn=rnn,
                                     outputs_info=[x0_, f_hidden(x0_)],
                                     sequences=u,
-                                    non_sequences=[Win_.T, Wrec_.T, D_])
+                                    non_sequences=[Win_.T, Wrec_.T])
         else:
-            def rnn(u_t, x_tm1, r_tm1, WrecT, D):
-                Wrec_value = WrecT.get_value().T
-                for p in range(len(D.get_value())):
-                    Wrec_value[p,:] = D.get_value()[p] * Wrec_value[p,:]
-                    Wrec_value[:,p] = D.get_value()[p] * Wrec_value[:,p]
-                WrecT.set_value(Wrec_value.T)
-
+            def rnn(u_t, x_tm1, r_tm1, WrecT):
                 x_t = ((1 - alpha)*x_tm1
                        + alpha*(T.dot(r_tm1, WrecT) # Recurrent
                                 + brec              # Bias
@@ -674,7 +652,7 @@ class Trainer(object):
             [x, r], _ = theano.scan(fn=rnn,
                                     outputs_info=[x0_, f_hidden(x0_)],
                                     sequences=u,
-                                    non_sequences=[Wrec_.T, D_])
+                                    non_sequences=[Wrec_.T])
 
         #---------------------------------------------------------------------------------
         # Running mode
@@ -724,6 +702,12 @@ class Trainer(object):
         inputs = [u, target]
         # target[:,:,:Nout] contains the target outputs, &
         # target[:,:,Nout:] contains the mask.
+
+
+
+        #print('inputs are: ',inputs) # added by Alfred
+#        print('u is: ',u) # added by Alfred
+#        print('target is: ',target[:,:,:Nout]) # added by Alfred
 
         # Loss, not including the regularization terms
         loss = T.sum(f_loss(z, target[:,:,:Nout])*mask)/masknorm
@@ -791,38 +775,6 @@ class Trainer(object):
             settings['L2 rate regularization'] = 'lambda2_r = {}'.format(lambda2)
             regs += lambda2 * T.mean(r**2)
 
-        #-----edit by Amartya - adding EWC to the cost function---------------------------
-        # EWC regularization
-        #--------------------------------------------------------------------------------
-        lambda3 = 500
-
-        Win_task1 = theanotools.shared(Win_0, name='Win_task1')
-        Wrec_task1 = theanotools.shared(Wrec_0, name='Wrec_task1')
-        Wout_task1 = theanotools.shared(Wout_0, name='Wout_task1')
-
-        g = theanotools.grad(T.log(theanotools.softmax(z)), trainables)
-        trainable_names = [tr.name for tr in trainables]
-        g_Win, g_Wrec, g_Wout, g_brec, g_bout, g_x0 = RNN.fill(g, trainable_names)
-
-        #first for Win
-        F_Win = theanotools.shared_zeros(shape = (Win_0.shape[0], Win_0.shape[1]), name='F_Win')
-        F_Win += (g_Win**2)/masknorm
-        regs += (lambda3/2)*T.sum(F_Win*((Win - Win_task1) ** 2))
-
-        #for Wrec
-        F_Wrec = theanotools.shared_zeros(shape = (Wrec_0.shape[0], Wrec_0.shape[1]), name='F_Wrec')
-        F_Wrec += (g_Wrec**2)/masknorm
-        regs += (lambda3/2)*T.sum(F_Wrec*((Wrec - Wrec_task1) ** 2))
-
-        #for Wout
-        F_Wout = theanotools.shared_zeros(shape = (Wout_0.shape[0], Wout_0.shape[1]), name='F_Wout')
-        F_Wout += (g_Wout**2)/masknorm
-        regs += (lambda3/2)*T.sum(F_Wout*((Wout - Wout_task1) ** 2))
-
-
-
-
-
         #---------------------------------------------------------------------------------
         # Final costs
         #---------------------------------------------------------------------------------
@@ -884,9 +836,15 @@ class Trainer(object):
         #---------------------------------------------------------------------------------
         # Train!
         #---------------------------------------------------------------------------------
-
+#        print "Before printing settings"  # added by Alfred
         print_settings(settings)
+
+        print "Settings printed"  # added by Alfred
 
         sgd = SGD(trainables, inputs, costs, regs, x, z, self.p, save_values,
                   {'Wrec_': Wrec_, 'd_f_hidden': d_f_hidden})
+
+        print "sgd initiated" # added by Alfred
         sgd.train(gradient_data, validation_data, savefile)
+
+        print "sgd trained"  # added by Alfred

@@ -17,6 +17,7 @@ import os
 import sys
 
 import numpy as np
+import matplotlib.pyplot as plt     # Alfred
 
 import theano
 import theano.tensor as T
@@ -189,7 +190,8 @@ class SGD(object):
         if 'Win' in self.trainable_names:
             g_Win  = T.switch(new_cond, np.float32(0), g_Win)
         g_Wrec = T.switch(new_cond, np.float32(0.02)*Wrec, g_Wrec)
-        g_Wout = T.switch(new_cond, np.float32(0), g_Wout)
+#        g_Wout = T.switch(new_cond, np.float32(0), g_Wout)
+        g_Wout = T.switch(new_cond, np.float32(0), np.float32(0))  # Added by Alfred for making wout gradients zero
         if 'brec' in self.trainable_names:
             g_brec = T.switch(new_cond, np.float32(0), g_brec)
         if 'bout' in self.trainable_names:
@@ -216,6 +218,10 @@ class SGD(object):
         # Update rule
         updates = [(theta, theta - lr*grad) for theta, grad in zip(self.trainables, g)]
 
+
+
+        print "just before sgd-train_step"  # added by Alfred
+        print "costs is: ",costs
         # Update function
         self.train_step = theanotools.function(
             inputs + [alpha, lambda_Omega, lr, maxnorm, bound],
@@ -223,6 +229,7 @@ class SGD(object):
             updates=updates
             )
 
+        print "before cost function"    # added by Alfred
         # Cost function
         self.f_cost = theanotools.function(inputs, [costs[0] + regs] + costs[1:] + [z])
 
@@ -270,6 +277,7 @@ class SGD(object):
         checkfreq = self.p['checkfreq']
         if checkfreq is None:
             checkfreq = int(1e4)//gradient_data.minibatch_size
+#            checkfreq = int(1e3)//gradient_data.minibatch_size  # Alfred
 
         patience = self.p['patience']
         if patience is None:
@@ -281,6 +289,8 @@ class SGD(object):
         maxnorm      = self.p['max_gradient_norm']
         bound        = self.p['bound']
         save_exclude = ['callback', 'performance', 'terminate']
+
+        print "Inside SGD training" # added by Alfred
 
         #---------------------------------------------------------------------------------
         # Continue previous run if we can
@@ -342,8 +352,10 @@ class SGD(object):
         tr_gnorm    = None
         try:
             tstart = datetime.datetime.now()
+            print "self.p['max_iter'] is: ",self.p['max_iter'] # Alfred
             for iter in xrange(first_iter, 1+self.p['max_iter']):
                 if iter % checkfreq == 1:
+                    print "inside iter ",iter   # Alfred
                     #---------------------------------------------------------------------
                     # Timestamp
                     #---------------------------------------------------------------------
@@ -460,11 +472,18 @@ class SGD(object):
                 #-------------------------------------------------------------------------
                 # Training step
                 #-------------------------------------------------------------------------
-
+#                print "training step no. ",iter # Alfred
                 tr_cost, tr_gnorm, tr_Omega, tr_nelems, tr_x = self.train_step(
                     *(gradient_data(best['other_costs'], callback_results)
                       + [alpha, lambda_Omega, lr, maxnorm, bound])
                      )
+#                print "tr_ are: ",tr_cost#,tr_gnorm,tr_Omega,tr_nelems,tr_x # Alfred
+#                zz = SGD.get_value(z)   # Alfred
+                #print zz[0]
+                #print len(zz[0])
+                #print sys.getsizeof(zz[0])
+#                plt.plot(zz[:,0,:])  # Alfred
+#                plt.show()  # Alfred
 
                 #-------------------------------------------------------------------------
         except KeyboardInterrupt:
